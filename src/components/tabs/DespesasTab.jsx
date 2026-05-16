@@ -3,10 +3,12 @@ import { fmtValor, totalDespesasPagas, totalDespesasPrevistas } from "../../util
 import { CATEGORIAS } from "../../constants";
 
 const TIPO_CFG = {
-  fixa:      { label: "Fixa",      bg: "#f0fdf4", cor: "#15803d" },
-  parcelada: { label: "Parcelada", bg: "#eff6ff", cor: "#2563eb" },
-  avulsa:    { label: "Avulsa",    bg: "#fffbeb", cor: "#d97706" },
+  fixa:      { label: "Recorrente", bg: "#f0fdf4", cor: "#15803d" },
+  parcelada: { label: "Parcelada",  bg: "#eff6ff", cor: "#2563eb" },
+  avulsa:    { label: "Única",      bg: "#fffbeb", cor: "#d97706" },
 };
+
+const naturezaDespesa = (d) => d.natureza ?? (d.tipo === "avulsa" ? "variavel" : "fixa");
 
 const FILTROS = [
   { key: "todos",     label: "Todos" },
@@ -98,6 +100,7 @@ function DCard({ d, ocultarValores, onTogglePago, onToggleFixado, onEditar, onDe
           <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 5 }}>
             <span style={{ fontWeight: 700, fontSize: 14, color: "#111" }}>{d.nome}</span>
             <span style={{ fontSize: 9, background: tipoCfg.bg, color: tipoCfg.cor, borderRadius: 5, padding: "2px 6px", fontWeight: 700, textTransform: "uppercase" }}>{tipoCfg.label}</span>
+            <span style={{ fontSize: 9, background: naturezaDespesa(d) === "variavel" ? "#fffbeb" : "#f0f4ff", color: naturezaDespesa(d) === "variavel" ? "#d97706" : "#6366f1", borderRadius: 5, padding: "2px 6px", fontWeight: 700 }}>{naturezaDespesa(d) === "variavel" ? "variável" : "fixa"}</span>
             {d.tipo === "parcelada" && (
               <span style={{ fontSize: 9, background: "#eff6ff", color: "#2563eb", borderRadius: 5, padding: "2px 6px", fontWeight: 700 }}>
                 faltam {d.totalParcelas - d.parcelaAtual + 1}/{d.totalParcelas}

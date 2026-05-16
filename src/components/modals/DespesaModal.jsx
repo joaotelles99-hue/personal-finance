@@ -8,11 +8,14 @@ const TIPOS = [
   { key: "avulsa",    label: "Única",      sub: "Só este mês" },
 ];
 
-const EMPTY = { nome: "", categoria: "outros", tipo: "fixa", valor: "", diaVencimento: "", conta: "", fixado: false, parcelaAtual: "1", totalParcelas: "" };
+const EMPTY = { nome: "", categoria: "outros", tipo: "fixa", natureza: "fixa", valor: "", diaVencimento: "", conta: "", fixado: false, parcelaAtual: "1", totalParcelas: "" };
+
+const naturezaDefaultDeTipo = (tipo) => tipo === "avulsa" ? "variavel" : "fixa";
 
 export default function DespesaModal({ editando, onSalvar, onFechar }) {
   const [form, setForm] = useState(editando ? {
     nome: editando.nome, categoria: editando.categoria, tipo: editando.tipo,
+    natureza: editando.natureza ?? naturezaDefaultDeTipo(editando.tipo),
     valor: String(editando.valor), diaVencimento: String(editando.diaVencimento ?? ""),
     conta: editando.conta ?? "", fixado: editando.fixado ?? false,
     parcelaAtual: String(editando.parcelaAtual ?? 1), totalParcelas: String(editando.totalParcelas ?? ""),
@@ -28,6 +31,7 @@ export default function DespesaModal({ editando, onSalvar, onFechar }) {
     if (!valor || valor <= 0) return setErro("Informe um valor válido.");
     const despesa = {
       ...editando, nome: form.nome.trim(), categoria: form.categoria, tipo: form.tipo,
+      natureza: form.natureza,
       valor, diaVencimento: form.diaVencimento ? Number(form.diaVencimento) : null,
       conta: form.conta.trim() || null, fixado: form.fixado, pago: editando?.pago ?? false,
     };
@@ -104,6 +108,25 @@ export default function DespesaModal({ editando, onSalvar, onFechar }) {
               Faltam {Number(form.totalParcelas) - Number(form.parcelaAtual) + 1} de {form.totalParcelas} parcelas
             </div>
           )}
+
+          {/* Natureza: fixa vs variável */}
+          <div>
+            <label style={lblStyle}>Natureza (para limite de gastos)</label>
+            <div style={{ display: "flex", gap: 8 }}>
+              {[
+                { key: "fixa",    label: "Fixa",     sub: "Entra nos fixos" },
+                { key: "variavel", label: "Variável", sub: "Consome o limite" },
+              ].map(n => {
+                const ativo = form.natureza === n.key;
+                return (
+                  <button key={n.key} onClick={() => set("natureza", n.key)} style={{ flex: 1, padding: "10px 8px", borderRadius: 12, fontSize: 12, fontWeight: 700, border: `2px solid ${ativo ? (n.key === "fixa" ? "#2563eb" : "#d97706") : "#f0f0f0"}`, background: ativo ? (n.key === "fixa" ? "#eff6ff" : "#fffbeb") : "#fafafa", color: ativo ? (n.key === "fixa" ? "#2563eb" : "#d97706") : "#888", transition: "all 0.15s" }}>
+                    <div>{n.label}</div>
+                    <div style={{ fontSize: 10, fontWeight: 400, marginTop: 2, opacity: 0.7 }}>{n.sub}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
           <Field label="Conta / Cartão (opcional)">
             <input type="text" value={form.conta} onChange={e => set("conta", e.target.value)} placeholder="Nubank, dinheiro..." style={inputStyle} />

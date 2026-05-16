@@ -1,6 +1,10 @@
 import { useState, useMemo, useEffect } from "react";
 import { useFirestore } from "./useFirestore";
-import { valorRecebido, valorPendente, getMesNome, totalDespesasPagas, totalDespesasPrevistas, resetarDespesasParaMes, calcularProjecao } from "./utils";
+import {
+  valorRecebido, valorPendente, getMesNome, getMesAno,
+  totalDespesasPagas, totalDespesasPrevistas, resetarDespesasParaMes,
+  calcularProjecao, calcularReservaInfo, calcularLimiteGastos, calcularInadimplencia,
+} from "./utils";
 import Header from "./components/Header";
 import BottomNav from "./components/BottomNav";
 import FAB from "./components/FAB";
@@ -19,35 +23,60 @@ export default function App() {
     despesas, setDespesas,
     orcamento, setOrcamento,
     historico, setHistorico,
+    reserva, setReserva,
+    pendencias, setPendencias,
     gastos,
     ocultarValores, setOcultarValores,
     fromFirebase,
     salvar,
   } = useFirestore();
 
-  const [aba,      setAba]      = useState("dashboard");
-  const [fabOpen,  setFabOpen]  = useState(false);
-  const [modal,    setModal]    = useState(null); // null | { tipo: 'aluno'|'despesa', editando: obj|null }
+  const [aba,     setAba]     = useState("dashboard");
+  const [fabOpen, setFabOpen] = useState(false);
+  const [modal,   setModal]   = useState(null);
 
-  // ── Sincroniza Firebase ao mudar estado ──────────────────────────────────
+  // ── Sincroniza Firebase ao mudar estado ──────────────────────────────────────
   useEffect(() => {
     if (fromFirebase.current) { fromFirebase.current = false; return; }
     if (carregando) return;
-    salvar({ alunos, despesas, orcamento, historico, gastos, ocultarValores });
-  }, [alunos, despesas, orcamento, historico, gastos, ocultarValores]);
+    salvar({ alunos, despesas, orcamento, historico, gastos, ocultarValores, reserva, pendencias });
+  }, [alunos, despesas, orcamento, historico, gastos, ocultarValores, reserva, pendencias]);
 
-  // ── Totais ────────────────────────────────────────────────────────────────
+  // ── Totais ────────────────────────────────────────────────────────────────────
   const totalPrevisto  = useMemo(() => alunos.reduce((s, a) => s + a.valor, 0), [alunos]);
   const totalRecebido  = useMemo(() => alunos.reduce((s, a) => s + valorRecebido(a), 0), [alunos]);
   const totalPendente  = useMemo(() => alunos.reduce((s, a) => s + valorPendente(a), 0), [alunos]);
   const despPagas      = useMemo(() => totalDespesasPagas(despesas), [despesas]);
   const despPrevistas  = useMemo(() => totalDespesasPrevistas(despesas), [despesas]);
   const saldo          = totalRecebido - despPagas;
-  const projecao       = useMemo(() => calcularProjecao(alunos, despesas), [alunos, despesas]);
 
-  // ── Fechar mês ────────────────────────────────────────────────────────────
+  const projecao       = useMemo(() => calcularProjecao(alunos, despesas), [alunos, despesas]);
+  const reservaInfo    = useMemo(() => calcularReservaInfo(reserva, totalRecebido), [reserva, totalRecebido]);
+  const limiteGastos   = useMemo(() => calcularLimiteGastos(reserva, totalPrevisto, despesas), [reserva, totalPrevisto, despesas]);
+  const inadimplencia  = useMemo(() => calcularInadimplencia(alunos, pendencias), [alunos, pendencias]);
+
+  // ── Fechar mês ────────────────────────────────────────────────────────────────
   const resetarMes = () => {
     if (!window.confirm(`Fechar ${getMesNome()} e começar novo mês?`)) return;
+
+    // Gera pendências para alunos que não pagaram
+    const novasPendencias = [];
+    alunos.forEach(a => {
+      const pendente = valorPendente(a);
+      if (pendente > 0) {
+        novasPendencias.push({
+          id: `${a.id}-${getMesAno()}`,
+          alunoId: a.id,
+          alunoNome: a.nome,
+          mes: getMesNome(),
+          valorOriginal: a.valor,
+          valorPendente: pendente,
+          pago: false,
+          observacao: null,
+        });
+      }
+    });
+
     const hist = [...historico, {
       mes: getMesNome(),
       total: totalRecebido,
@@ -59,14 +88,17 @@ export default function App() {
       despesas: despesas.map(d => ({ ...d })),
     }];
     if (hist.length > 24) hist.shift();
+
     setHistorico(hist);
     setAlunos(prev => prev.map(a =>
       a.dupla ? { ...a, pago: false, pago1: false, pago2: false } : { ...a, pago: false }
     ));
     setDespesas(prev => resetarDespesasParaMes(prev));
+    setPendencias(prev => [...prev, ...novasPendencias]);
+    setReserva(prev => ({ ...prev, separado: 0 }));
   };
 
-  // ── Ações alunos ──────────────────────────────────────────────────────────
+  // ── Ações alunos ──────────────────────────────────────────────────────────────
   const togglePago  = (id) => setAlunos(p => p.map(a => a.id === id ? { ...a, pago: !a.pago } : a));
   const togglePago1 = (id) => setAlunos(p => p.map(a => a.id === id ? { ...a, pago1: !a.pago1 } : a));
   const togglePago2 = (id) => setAlunos(p => p.map(a => a.id === id ? { ...a, pago2: !a.pago2 } : a));
@@ -80,9 +112,9 @@ export default function App() {
     setModal(null);
   };
 
-  // ── Ações despesas ────────────────────────────────────────────────────────
-  const toggleDespesaPago = (id) => setDespesas(p => p.map(d => d.id === id ? { ...d, pago: !d.pago } : d));
-  const toggleDespesaFixado = (id) => setDespesas(p => p.map(d => d.id === id ? { ...d, fixado: !d.fixado } : d));
+  // ── Ações despesas ────────────────────────────────────────────────────────────
+  const toggleDespesaPago    = (id) => setDespesas(p => p.map(d => d.id === id ? { ...d, pago: !d.pago } : d));
+  const toggleDespesaFixado  = (id) => setDespesas(p => p.map(d => d.id === id ? { ...d, fixado: !d.fixado } : d));
   const deletarDespesa = (id) => setDespesas(p => p.filter(d => d.id !== id));
   const salvarDespesa = (despesa) => {
     if (despesa.id && despesas.find(d => d.id === despesa.id)) {
@@ -92,6 +124,10 @@ export default function App() {
     }
     setModal(null);
   };
+
+  // ── Ações pendências ──────────────────────────────────────────────────────────
+  const pagarPendencia  = (id) => setPendencias(p => p.map(x => x.id === id ? { ...x, pago: true } : x));
+  const editarObsPendencia = (id, obs) => setPendencias(p => p.map(x => x.id === id ? { ...x, observacao: obs } : x));
 
   if (carregando) {
     return (
@@ -123,6 +159,11 @@ export default function App() {
             alunos={alunos} despesas={despesas}
             ocultarValores={ocultarValores}
             projecao={projecao}
+            reservaInfo={reservaInfo}
+            limiteGastos={limiteGastos}
+            inadimplencia={inadimplencia}
+            pendencias={pendencias}
+            onPagarPendencia={pagarPendencia}
           />
         )}
         {aba === "alunos" && (
@@ -131,6 +172,9 @@ export default function App() {
             onTogglePago={togglePago} onTogglePago1={togglePago1} onTogglePago2={togglePago2}
             onEditar={(a) => setModal({ tipo: "aluno", editando: a })}
             onDeletar={deletarAluno}
+            pendencias={pendencias}
+            onPagarPendencia={pagarPendencia}
+            onEditarObsPendencia={editarObsPendencia}
           />
         )}
         {aba === "despesas" && (
@@ -153,6 +197,9 @@ export default function App() {
             totalRecebido={totalRecebido} despesas={despesas}
             orcamento={orcamento} ocultarValores={ocultarValores}
             onAtualizarOrcamento={setOrcamento}
+            reserva={reserva}
+            onAtualizarReserva={setReserva}
+            reservaInfo={reservaInfo}
           />
         )}
       </div>

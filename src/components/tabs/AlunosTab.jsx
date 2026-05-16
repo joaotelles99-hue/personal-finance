@@ -24,7 +24,7 @@ const FILTROS = [
   { key: "em-dia",    label: "Em dia" },
 ];
 
-export default function AlunosTab({ alunos, ocultarValores, onTogglePago, onTogglePago1, onTogglePago2, onEditar, onDeletar }) {
+export default function AlunosTab({ alunos, ocultarValores, onTogglePago, onTogglePago1, onTogglePago2, onEditar, onDeletar, pendencias, onPagarPendencia, onEditarObsPendencia }) {
   const [filtro, setFiltro] = useState("todos");
 
   const counts = useMemo(() => ({
@@ -78,17 +78,22 @@ export default function AlunosTab({ alunos, ocultarValores, onTogglePago, onTogg
             <div style={{ fontSize: 13, marginTop: 8 }}>Nenhum aqui</div>
           </div>
         )}
-        {lista.map(a => (
-          <AlunoCard key={a.id} aluno={a} ocultarValores={ocultarValores}
-            onTogglePago={onTogglePago} onTogglePago1={onTogglePago1} onTogglePago2={onTogglePago2}
-            onEditar={onEditar} onDeletar={onDeletar} />
-        ))}
+        {lista.map(a => {
+          const pendsAluno = (pendencias ?? []).filter(p => p.alunoId === a.id && !p.pago);
+          return (
+            <AlunoCard key={a.id} aluno={a} ocultarValores={ocultarValores}
+              onTogglePago={onTogglePago} onTogglePago1={onTogglePago1} onTogglePago2={onTogglePago2}
+              onEditar={onEditar} onDeletar={onDeletar}
+              pendenciasAnteriores={pendsAluno}
+              onPagarPendencia={onPagarPendencia} />
+          );
+        })}
       </div>
     </div>
   );
 }
 
-function AlunoCard({ aluno: a, ocultarValores, onTogglePago, onTogglePago1, onTogglePago2, onEditar, onDeletar }) {
+function AlunoCard({ aluno: a, ocultarValores, onTogglePago, onTogglePago1, onTogglePago2, onEditar, onDeletar, pendenciasAnteriores, onPagarPendencia }) {
   const status   = getAlunoStatus(a, hoje);
   const cfg      = STATUS_CFG[status];
   const saidaCfg = SAIDA_CFG[a.statusSaida ?? "ativo"];
@@ -165,6 +170,27 @@ function AlunoCard({ aluno: a, ocultarValores, onTogglePago, onTogglePago1, onTo
           </div>
         );
       })()}
+
+      {/* Pendências anteriores */}
+      {pendenciasAnteriores?.length > 0 && (
+        <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid #f5f5f5" }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: "#dc2626", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>Pendências anteriores</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+            {pendenciasAnteriores.map(p => (
+              <div key={p.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#fff5f5", borderRadius: 8, padding: "7px 10px" }}>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#dc2626" }}>{p.mes}</div>
+                  {p.observacao && <div style={{ fontSize: 10, color: "#aaa" }}>{p.observacao}</div>}
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 13, fontWeight: 800, color: "#dc2626" }}>{fmtValor(p.valorPendente, ocultarValores)}</span>
+                  <button onClick={() => onPagarPendencia(p.id)} style={{ background: "#22c55e", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 11, fontWeight: 700, color: "#fff" }}>Pago</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Ações */}
       <div style={{ display: "flex", gap: 6, marginTop: 12, justifyContent: "flex-end" }}>

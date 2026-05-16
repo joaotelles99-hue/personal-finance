@@ -3,12 +3,15 @@ import { db, estadoRef, onSnapshot, setDoc } from "./firebase";
 import { initialAlunos } from "./constants";
 import { getMesAno } from "./utils";
 
+const RESERVA_PADRAO = { percentual: 20, valorFixo: 4000, modo: "fixo", separado: 0 };
 
 export function useFirestore() {
   const [alunos,         setAlunos]         = useState(initialAlunos);
   const [despesas,       setDespesas]       = useState([]);
   const [orcamento,      setOrcamento]      = useState([]);
   const [historico,      setHistorico]      = useState([]);
+  const [reserva,        setReserva]        = useState(RESERVA_PADRAO);
+  const [pendencias,     setPendencias]     = useState([]);
   const [ocultarValores, setOcultarValores] = useState(false);
   const [gastos,         setGastos]         = useState(1500);
   const [carregando,     setCarregando]     = useState(true);
@@ -16,12 +19,13 @@ export function useFirestore() {
   const fromFirebase = useRef(false);
   const saveTimer    = useRef(null);
 
-  // ── Escuta Firestore ───────────────────────────────────────────────────────
+  // ── Escuta Firestore ───────────────────────────────────────────────────────────
   useEffect(() => {
     const unsub = onSnapshot(estadoRef, (snap) => {
       if (!snap.exists()) {
         setDoc(estadoRef, {
           alunos: initialAlunos, despesas: [], orcamento: [], historico: [],
+          reserva: RESERVA_PADRAO, pendencias: [],
           gastos: 1500, ocultarValores: false, mes: getMesAno(),
         });
         setCarregando(false);
@@ -35,6 +39,8 @@ export function useFirestore() {
       setDespesas(data.despesas ?? []);
       setOrcamento(data.orcamento ?? []);
       setHistorico(data.historico ?? []);
+      setReserva(data.reserva ?? RESERVA_PADRAO);
+      setPendencias(data.pendencias ?? []);
       setGastos(data.gastos ?? 1500);
       setOcultarValores(data.ocultarValores ?? false);
       setCarregando(false);
@@ -42,7 +48,7 @@ export function useFirestore() {
     return () => unsub();
   }, []);
 
-  // ── Salva no Firestore (debounced 500ms) ──────────────────────────────────
+  // ── Salva no Firestore (debounced 500ms) ──────────────────────────────────────
   const salvar = (estado) => {
     clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
@@ -56,6 +62,8 @@ export function useFirestore() {
     despesas, setDespesas,
     orcamento, setOrcamento,
     historico, setHistorico,
+    reserva, setReserva,
+    pendencias, setPendencias,
     gastos, setGastos,
     ocultarValores, setOcultarValores,
     fromFirebase,
