@@ -24,8 +24,10 @@ const FILTROS = [
   { key: "em-dia",    label: "Em dia" },
 ];
 
-export default function AlunosTab({ alunos, ocultarValores, onTogglePago, onTogglePago1, onTogglePago2, onEditar, onDeletar, pendencias, onPagarPendencia, onEditarObsPendencia }) {
+export default function AlunosTab({ alunos, ocultarValores, onTogglePago, onTogglePago1, onTogglePago2, onEditar, onPagamento, onDeletar, pendencias, onPagarPendencia, onEditarObsPendencia }) {
   const [filtro, setFiltro] = useState("todos");
+  const [busca, setBusca] = useState("");
+  const normalize = value => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
   const counts = useMemo(() => ({
     todos: alunos.length,
@@ -35,18 +37,20 @@ export default function AlunosTab({ alunos, ocultarValores, onTogglePago, onTogg
   }), [alunos]);
 
   const lista = useMemo(() => {
-    const sorted = [...alunos].sort((a, b) => a.vencimento - b.vencimento);
+    const sorted = alunos.filter(a => normalize(a.nome).includes(normalize(busca))).sort((a, b) => a.vencimento - b.vencimento);
     if (filtro === "todos")     return sorted;
     if (filtro === "atrasados") return sorted.filter(a => getAlunoStatus(a, hoje) === "atrasado");
     if (filtro === "vence3")    return sorted.filter(a => getAlunoStatus(a, hoje) === "vence-em-breve");
     if (filtro === "em-dia")    return sorted.filter(a => getAlunoStatus(a, hoje) === "em-dia");
     return sorted;
-  }, [alunos, filtro]);
+  }, [alunos, filtro, busca]);
 
   const pagosCount = alunos.filter(a => totalmentePago(a)).length;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div className="section-heading"><div><span className="eyebrow">SUA CARTEIRA</span><h2>Alunos e recebimentos</h2><p>Busque, confira vencimentos e registre pagamentos.</p></div></div>
+      <input className="search-input" aria-label="Buscar aluno" placeholder="Buscar aluno pelo nome…" value={busca} onChange={e=>setBusca(e.target.value)} />
       {/* Filtros */}
       <div style={{ display: "flex", gap: 6, overflowX: "auto", scrollbarWidth: "none", paddingBottom: 2 }}>
         {FILTROS.map(f => {
@@ -83,7 +87,7 @@ export default function AlunosTab({ alunos, ocultarValores, onTogglePago, onTogg
           return (
             <AlunoCard key={a.id} aluno={a} ocultarValores={ocultarValores}
               onTogglePago={onTogglePago} onTogglePago1={onTogglePago1} onTogglePago2={onTogglePago2}
-              onEditar={onEditar} onDeletar={onDeletar}
+              onEditar={onEditar} onPagamento={onPagamento} onDeletar={onDeletar}
               pendenciasAnteriores={pendsAluno}
               onPagarPendencia={onPagarPendencia} />
           );
@@ -93,7 +97,7 @@ export default function AlunosTab({ alunos, ocultarValores, onTogglePago, onTogg
   );
 }
 
-function AlunoCard({ aluno: a, ocultarValores, onTogglePago, onTogglePago1, onTogglePago2, onEditar, onDeletar, pendenciasAnteriores, onPagarPendencia }) {
+function AlunoCard({ aluno: a, ocultarValores, onTogglePago, onTogglePago1, onTogglePago2, onEditar, onPagamento, onDeletar, pendenciasAnteriores, onPagarPendencia }) {
   const status   = getAlunoStatus(a, hoje);
   const cfg      = STATUS_CFG[status];
   const saidaCfg = SAIDA_CFG[a.statusSaida ?? "ativo"];
@@ -106,7 +110,7 @@ function AlunoCard({ aluno: a, ocultarValores, onTogglePago, onTogglePago1, onTo
       <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
         {/* Toggle individual */}
         {!a.dupla && (
-          <button onClick={() => onTogglePago(a.id)} style={{
+          <button aria-label={`${totPago ? "Desmarcar" : "Confirmar"} pagamento de ${a.nome}`} onClick={() => onTogglePago(a.id)} style={{
             width: 28, height: 28, borderRadius: "50%", border: `2px solid ${totPago ? "#22c55e" : "#e0e0e0"}`,
             background: totPago ? "#22c55e" : "#fff", flexShrink: 0,
             display: "flex", alignItems: "center", justifyContent: "center",
@@ -157,7 +161,7 @@ function AlunoCard({ aluno: a, ocultarValores, onTogglePago, onTogglePago1, onTo
               { nome: n1, pago: a.pago1, toggle: () => onTogglePago1(a.id) },
               { nome: n2, pago: a.pago2, toggle: () => onTogglePago2(a.id) },
             ].map((p, i) => (
-              <div key={i} onClick={p.toggle} style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, background: p.pago ? "#f0fdf4" : "#fafafa", borderRadius: 10, padding: "10px 12px", cursor: "pointer", border: `1px solid ${p.pago ? "#bbf7d0" : "#f0f0f0"}`, transition: "all 0.15s" }}>
+              <button type="button" aria-pressed={!!p.pago} aria-label={`Pagamento de ${p.nome}`} key={i} onClick={p.toggle} style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, background: p.pago ? "#f0fdf4" : "#fafafa", borderRadius: 10, padding: "10px 12px", cursor: "pointer", border: `1px solid ${p.pago ? "#bbf7d0" : "#f0f0f0"}`, transition: "all 0.15s" }}>
                 <div style={{ width: 20, height: 20, borderRadius: "50%", background: p.pago ? "#22c55e" : "#fff", border: `2px solid ${p.pago ? "#22c55e" : "#e0e0e0"}`, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 11, flexShrink: 0 }}>
                   {p.pago ? "✓" : ""}
                 </div>
@@ -165,7 +169,7 @@ function AlunoCard({ aluno: a, ocultarValores, onTogglePago, onTogglePago1, onTo
                   <div style={{ fontSize: 12, fontWeight: 700, color: "#333" }}>{p.nome}</div>
                   <div style={{ fontSize: 11, color: p.pago ? "#22c55e" : "#aaa" }}>{fmtValor(metade, ocultarValores)}</div>
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         );
@@ -192,6 +196,7 @@ function AlunoCard({ aluno: a, ocultarValores, onTogglePago, onTogglePago1, onTo
         </div>
       )}
 
+      <div className="payment-fields">{(a.dupla ? [1,2] : [0]).map(i=><label key={i}>Pagamento {a.dupla ? nomesDiv(a.nome)[i-1] : "do mês"}<select aria-label={`Forma de pagamento ${a.nome} ${i}`} value={a[`formaPagamento${i||""}`] || ""} onChange={e=>onPagamento(a.id, `formaPagamento${i||""}`, e.target.value)}><option value="">Não informado</option><option value="pix">Pix</option><option value="cartao">Cartão</option><option value="dinheiro">Dinheiro</option></select></label>)}</div>
       {/* Ações */}
       <div style={{ display: "flex", gap: 6, marginTop: 12, justifyContent: "flex-end" }}>
         <button onClick={() => onEditar(a)} style={{ background: "#f3f4f6", border: "none", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 600, color: "#555" }}>Editar</button>

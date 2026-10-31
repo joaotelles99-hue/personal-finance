@@ -1,3 +1,4 @@
+import { demoMode } from "./firebase";
 import { useState, useMemo, useEffect } from "react";
 import { useFirestore } from "./useFirestore";
 import {
@@ -18,7 +19,7 @@ import DivisaoTab from "./components/tabs/DivisaoTab";
 
 export default function App() {
   const {
-    carregando,
+    carregando, erro, syncStatus, tentarNovamente,
     alunos, setAlunos,
     despesas, setDespesas,
     orcamento, setOrcamento,
@@ -91,7 +92,7 @@ export default function App() {
 
     setHistorico(hist);
     setAlunos(prev => prev.map(a =>
-      a.dupla ? { ...a, pago: false, pago1: false, pago2: false } : { ...a, pago: false }
+      a.dupla ? { ...a, pago: false, pago1: false, pago2: false, formaPagamento1: "", formaPagamento2: "" } : { ...a, pago: false, formaPagamento: "" }
     ));
     setDespesas(prev => resetarDespesasParaMes(prev));
     setPendencias(prev => [...prev, ...novasPendencias]);
@@ -102,7 +103,9 @@ export default function App() {
   const togglePago  = (id) => setAlunos(p => p.map(a => a.id === id ? { ...a, pago: !a.pago } : a));
   const togglePago1 = (id) => setAlunos(p => p.map(a => a.id === id ? { ...a, pago1: !a.pago1 } : a));
   const togglePago2 = (id) => setAlunos(p => p.map(a => a.id === id ? { ...a, pago2: !a.pago2 } : a));
-  const deletarAluno = (id) => setAlunos(p => p.filter(a => a.id !== id));
+  const deletarAluno = (id) => {
+    if (window.confirm("Remover este cadastro? Baixe um backup antes se precisar guardar os dados.")) setAlunos(p => p.filter(a => a.id !== id));
+  };
   const salvarAluno = (aluno) => {
     if (aluno.id && alunos.find(a => a.id === aluno.id)) {
       setAlunos(p => p.map(a => a.id === aluno.id ? aluno : a));
@@ -115,7 +118,9 @@ export default function App() {
   // ── Ações despesas ────────────────────────────────────────────────────────────
   const toggleDespesaPago    = (id) => setDespesas(p => p.map(d => d.id === id ? { ...d, pago: !d.pago } : d));
   const toggleDespesaFixado  = (id) => setDespesas(p => p.map(d => d.id === id ? { ...d, fixado: !d.fixado } : d));
-  const deletarDespesa = (id) => setDespesas(p => p.filter(d => d.id !== id));
+  const deletarDespesa = (id) => {
+    if (window.confirm("Remover esta despesa?")) setDespesas(p => p.filter(d => d.id !== id));
+  };
   const salvarDespesa = (despesa) => {
     if (despesa.id && despesas.find(d => d.id === despesa.id)) {
       setDespesas(p => p.map(d => d.id === despesa.id ? despesa : d));
@@ -129,6 +134,13 @@ export default function App() {
   const pagarPendencia  = (id) => setPendencias(p => p.map(x => x.id === id ? { ...x, pago: true } : x));
   const editarObsPendencia = (id, obs) => setPendencias(p => p.map(x => x.id === id ? { ...x, observacao: obs } : x));
 
+  const baixarBackup = () => {
+    const dados = { formato: "personal-finance", versao: 1, exportadoEm: new Date().toISOString(), alunos, despesas, orcamento, historico, gastos, ocultarValores, reserva, pendencias };
+    const url = URL.createObjectURL(new Blob([JSON.stringify(dados, null, 2)], { type: "application/json" }));
+    const link = document.createElement("a"); link.href = url; link.download = `personal-finance-${new Date().toISOString().slice(0,10)}.json`; link.click(); URL.revokeObjectURL(url);
+  };
+
+  if (erro && carregando) return <main className="connection-error" role="alert"><h1>Não foi possível abrir seus dados.</h1><p>Confira a conexão e as configurações do Firebase. Nenhum cadastro foi substituído.</p><button onClick={() => window.location.reload()}>Tentar novamente</button></main>;
   if (carregando) {
     return (
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", fontFamily: "'Segoe UI',sans-serif", flexDirection: "column", gap: 16, color: "#1a5c38" }}>
@@ -139,9 +151,11 @@ export default function App() {
   }
 
   return (
-    <div style={{ fontFamily: "'Segoe UI',sans-serif", background: "#f0f4f8", minHeight: "100vh", paddingBottom: "calc(64px + env(safe-area-inset-bottom, 0px))" }}>
+    <div className="app-shell">
+      {demoMode && <div className="demo-banner">PRÉVIA · Dados de exemplo. As alterações não são salvas no Firebase.</div>}
       <Header
         mesNome={getMesNome()}
+        onBackup={baixarBackup} syncStatus={syncStatus} onRetry={tentarNovamente}
         totalPrevisto={totalPrevisto}
         totalRecebido={totalRecebido}
         totalPendente={totalPendente}
@@ -150,7 +164,7 @@ export default function App() {
         onResetarMes={resetarMes}
       />
 
-      <div style={{ maxWidth: 800, margin: "0 auto", padding: "16px 16px 0" }}>
+      <main className="main-content">
         {aba === "dashboard" && (
           <DashboardTab
             totalPrevisto={totalPrevisto} totalRecebido={totalRecebido}
@@ -168,6 +182,7 @@ export default function App() {
         )}
         {aba === "alunos" && (
           <AlunosTab
+            onPagamento={(id,campo,valor)=>setAlunos(p=>p.map(a=>a.id===id?{...a,[campo]:valor}:a))}
             alunos={alunos} ocultarValores={ocultarValores}
             onTogglePago={togglePago} onTogglePago1={togglePago1} onTogglePago2={togglePago2}
             onEditar={(a) => setModal({ tipo: "aluno", editando: a })}
@@ -202,7 +217,7 @@ export default function App() {
             reservaInfo={reservaInfo}
           />
         )}
-      </div>
+      </main>
 
       <BottomNav aba={aba} onAbaChange={setAba} />
 

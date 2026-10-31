@@ -23,10 +23,14 @@ export default function AlunoModal({ editando, onSalvar, onFechar }) {
     } : EMPTY
   );
 
+  const [erro, setErro] = useState("");
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
   const handleSalvar = () => {
-    if (!form.nome.trim() || !form.valor || !form.vencimento) return;
+    if (!form.nome.trim() || !Number.isFinite(Number(form.valor)) || Number(form.valor) <= 0 || !Number.isInteger(Number(form.vencimento)) || Number(form.vencimento)<1 || Number(form.vencimento)>31) {
+      setErro("Informe nome, valor maior que zero e vencimento entre 1 e 31."); return;
+    }
+    if(form.dupla && !/\s+e\s+/i.test(form.nome)) { setErro("Informe os dois nomes separados por ‘ e ’ para cadastrar uma dupla."); return; }
     const base = {
       ...editando,
       nome: form.nome.trim(),
@@ -109,6 +113,7 @@ export default function AlunoModal({ editando, onSalvar, onFechar }) {
           )}
         </div>
 
+        {erro && <p role="alert" style={{color:"#b42318"}}>{erro}</p>}
         <div style={{ display: "flex", gap: 10, marginTop: 24 }}>
           <button onClick={onFechar} style={{ flex: 1, padding: 15, border: "1.5px solid #f0f0f0", borderRadius: 14, background: "#fff", fontWeight: 600, fontSize: 14, color: "#555" }}>Cancelar</button>
           <button onClick={handleSalvar} style={{ flex: 1, padding: 15, border: "none", borderRadius: 14, background: "#111", color: "#fff", fontWeight: 700, fontSize: 14 }}>Salvar</button>

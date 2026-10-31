@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { db, estadoRef, onSnapshot, setDoc } from "./firebase";
+import { estadoRef, onSnapshot, setDoc, demoMode } from "./firebase";
 import { initialAlunos } from "./constants";
 import { getMesAno } from "./utils";
 
@@ -16,23 +16,26 @@ export function useFirestore() {
   const [gastos,         setGastos]         = useState(1500);
   const [carregando,     setCarregando]     = useState(true);
 
+  const [erro, setErro] = useState(null);
+  const [syncStatus, setSyncStatus] = useState("salvo");
+  const lastState = useRef(null);
   const fromFirebase = useRef(false);
   const saveTimer    = useRef(null);
 
   // ── Escuta Firestore ───────────────────────────────────────────────────────────
   useEffect(() => {
+    if (demoMode) { setCarregando(false); return; }
+    if (!estadoRef) { setErro(new Error("Firebase não configurado")); setSyncStatus("erro"); return; }
     const unsub = onSnapshot(estadoRef, (snap) => {
       if (!snap.exists()) {
-        setDoc(estadoRef, {
-          alunos: initialAlunos, despesas: [], orcamento: [], historico: [],
-          reserva: RESERVA_PADRAO, pendencias: [],
-          gastos: 1500, ocultarValores: false, mes: getMesAno(),
-        });
-        setCarregando(false);
-        return;
+        setErro(new Error("Documento de dados ausente"));
+        setSyncStatus("erro");
+        return; // Nunca recria cadastros iniciais sobre um banco vazio ou incorreto.
       }
 
+      if (snap.metadata.hasPendingWrites) return;
       const data = snap.data();
+      setErro(null);
 
       fromFirebase.current = true;
       setAlunos(data.alunos ?? initialAlunos);
@@ -44,20 +47,28 @@ export function useFirestore() {
       setGastos(data.gastos ?? 1500);
       setOcultarValores(data.ocultarValores ?? false);
       setCarregando(false);
+    }, (error) => {
+      setErro(error); setSyncStatus("erro");
     });
-    return () => unsub();
+    return () => { unsub(); clearTimeout(saveTimer.current); };
   }, []);
 
   // ── Salva no Firestore (debounced 500ms) ──────────────────────────────────────
   const salvar = (estado) => {
+    if (demoMode || !estadoRef) return;
+    lastState.current = estado;
+    setSyncStatus("salvando");
     clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
-      setDoc(estadoRef, { ...estado, mes: getMesAno() });
+      setDoc(estadoRef, { ...estado, mes: getMesAno() }, { merge: true })
+        .then(() => { setSyncStatus("salvo"); setErro(null); })
+        .catch(error => { setErro(error); setSyncStatus("erro"); });
     }, 500);
   };
 
   return {
-    carregando,
+    carregando, erro, syncStatus,
+    tentarNovamente: () => { if (lastState.current) salvar(lastState.current); else window.location.reload(); },
     alunos, setAlunos,
     despesas, setDespesas,
     orcamento, setOrcamento,

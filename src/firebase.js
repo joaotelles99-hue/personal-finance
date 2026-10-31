@@ -10,7 +10,9 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
-const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app);
-export const estadoRef = doc(db, "dados", "estado");
+export const demoMode = import.meta.env.VITE_DEMO_MODE === "true";
+const configured = firebaseConfig.apiKey && firebaseConfig.projectId && firebaseConfig.appId;
+export const app = configured && !demoMode ? initializeApp(firebaseConfig) : null;
+export const db = app ? getFirestore(app) : null;
+export const estadoRef = db ? doc(db, "dados", "estado") : null;
 export { onSnapshot, setDoc };
